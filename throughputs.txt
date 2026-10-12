@@ -1,0 +1,3 @@
+Intel(R)Xeon(R)CPUE5-1620v3@3.50GHz:regular:20092
+13thGenIntel(R)Core(TM)i7-13700K:regular:38304
+Intel(R)Xeon(R)Gold6226RCPU@2.90GHz:regular:22956
