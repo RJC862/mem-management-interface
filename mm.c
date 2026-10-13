@@ -1,7 +1,7 @@
 /*
  * mm.c
  *
- * Name: [FILL IN]
+ * Name: Ryan Cao
  *
  * NOTE TO STUDENTS: Replace this header comment with your own header
  * comment that gives a high level description of your solution.
@@ -49,6 +49,12 @@
 
 #define ALIGNMENT 16
 
+typedef struct block {
+  int header[8];
+  int payload[16];
+  int footer[8];
+} block_t;
+
 // rounds up to the nearest multiple of ALIGNMENT
 static size_t align(size_t x)
 {
@@ -60,7 +66,9 @@ static size_t align(size_t x)
  */
 bool mm_init(void)
 {
-    // IMPLEMENT THIS
+    int *padding = mm_sbrk(8);
+    
+    if (padding == NULL) {return false;}
     return true;
 }
 
@@ -69,8 +77,32 @@ bool mm_init(void)
  */
 void* malloc(size_t size)
 {
-    // IMPLEMENT THIS
-    return NULL;
+    printf("malloc'd: %ld Bytes\n", size);
+    
+    int aligned_size = align(size);
+    
+    printf("Aligned size: %d\n", aligned_size);
+    void *new_block = mm_sbrk(aligned_size + 16);
+    
+    if (new_block == NULL) {return NULL;}
+    
+    printf("mm_sbrk success\n");
+    
+    int *header = (int*) new_block;
+    void *payload = header + 2;
+    int *footer = (int*) payload + aligned_size;
+    
+    // header: store block size & allocated bit
+    *header = aligned_size;
+    *(header + 1) = 1;
+    
+    // footer: same contents as header
+    *footer = *header;
+    *(footer + 1) = *(header + 4);
+    
+    printf("header address: %p  payload address: %p  footer address: %p\n", header, payload, footer);
+    
+    return payload;
 }
 
 /*
