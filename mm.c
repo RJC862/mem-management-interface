@@ -66,7 +66,7 @@ static size_t align(size_t x)
  */
 bool mm_init(void)
 {
-    int *padding = mm_sbrk(8);
+    char *padding = mm_sbrk(8);
     
     if (padding == NULL) {return false;}
     return true;
@@ -77,7 +77,7 @@ bool mm_init(void)
  */
 void* malloc(size_t size)
 {
-    printf("malloc'd: %ld Bytes\n", size);
+    printf("malloc'd: %ld Bytes\n", size); // REMOVE LATER
     
     int aligned_size = align(size);
     
@@ -86,21 +86,21 @@ void* malloc(size_t size)
     
     if (new_block == NULL) {return NULL;}
     
-    printf("mm_sbrk success\n");
+    printf("mm_sbrk success\n"); // REMOVE LATER
     
     int *header = (int*) new_block;
     void *payload = header + 2;
-    int *footer = (int*) payload + aligned_size;
+    int *footer = (int*)((char *)payload + aligned_size);
     
     // header: store block size & allocated bit
-    *header = aligned_size;
-    *(header + 1) = 1;
+    header[0] = aligned_size;
+    header[1] = 1;
     
     // footer: same contents as header
-    *footer = *header;
-    *(footer + 1) = *(header + 4);
+    footer[0] = header[0];
+    footer[1] = header[1];
     
-    printf("header address: %p  payload address: %p  footer address: %p\n", header, payload, footer);
+    printf("header address: %p  payload address: %p  footer address: %p\n", header, payload, footer); // REMOVE LATER
     
     return payload;
 }
@@ -110,7 +110,22 @@ void* malloc(size_t size)
  */
 void free(void* ptr)
 {
-    // IMPLEMENT THIS
+    if (ptr == NULL) {return;}
+    
+    // clear the allocated bit in header and footer
+    
+    char *my_ptr = (char *) ptr;
+    
+    int block_size = *((int *)(my_ptr-8));
+    int payload_size = block_size - 16;
+    
+    int *header = (int *)(my_ptr-8);
+    int *footer = (int *)(my_ptr + payload_size + 4);
+    // header
+    *(header + 1) = 0;
+    
+    // footer
+    *(footer + 1) = 0;
     return;
 }
 
