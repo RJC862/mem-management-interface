@@ -3,27 +3,31 @@
 #include <stdlib.h>
 
 
-// insert at tail
-void list_insert(list_t *list, void *data){
+void list_insert(list_t *list, void *block_p){
+
+  // always insert at the tail
+  
+  
   if (data == NULL) {return false;}
   
-  list_node_t *node;
-  
+  // store field data inside the free block itself
+  list_node_t *node = (list_node_t *) block_p;
   node->prev = NULL;
   node->next = NULL;
-  node->data = data;
   
-  if (list->tail == NULL){
+  // insert in empty list
+  if (list->head == NULL) {
     list->head = node;
     list->tail = node;
+    list->count++;
     return;
   }
   
-  list_node_t *tail_node = list->tail;
-  
-  tail_node->next = node;
-  node->prev = tail_node;
+  // insert at tail
+  list->tail->next = node;
+  node->prev = list->tail;
   list->tail = node;
+  
   
   return;
 }
