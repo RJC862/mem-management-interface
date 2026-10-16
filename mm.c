@@ -18,6 +18,7 @@
 
 #include "mm.h"
 #include "memlib.h"
+#include "linked_list.h"
 
 /*
  * If you want to enable your debugging output and heap checker code,
@@ -49,12 +50,6 @@
 
 #define ALIGNMENT 16
 
-typedef struct block {
-  int header[8];
-  int payload[16];
-  int footer[8];
-} block_t;
-
 // rounds up to the nearest multiple of ALIGNMENT
 static size_t align(size_t x)
 {
@@ -72,38 +67,104 @@ bool mm_init(void)
     return true;
 }
 
+// helper function for setting header values
+void* set_header(void *block, size_t size) {
+  if (block == NULL) {return NULL;}
+  
+  uint64_t *header = (uint64_t*) block;
+  
+  *header = size;
+  *header = *header + 1;
+  
+  return header;
+}
+
+// helper function for getting payload pointer
+void *get_payload(void *block) {
+
+    if (block == NULL) {return NULL;}
+    
+    void *payload = (void*) ((char*)block + 8);
+    return payload;
+}
+
+// helper function for setting footer values
+void *set_footer(void *block, size_t size) {
+
+  if (block == NULL) {return NULL;}
+  
+  uint64_t *footer = (uint64_t*) ((char*)block + size - 8);
+  
+  *footer = size;
+  *footer = *footer + 1;
+  return footer;
+}
+
 /*
  * malloc
  */
 void* malloc(size_t size)
 {
-    printf("malloc'd: %ld Bytes\n", size); // REMOVE LATER
+    //printf("malloc'd: %ld Bytes\n", size); // REMOVE LATER
     
-    int aligned_size = align(size);
+    uint64_t aligned_size = align(size);
     
-    printf("Aligned size: %d\n", aligned_size);
+    //printf("Aligned size: %ld\n", aligned_size);
     void *new_block = mm_sbrk(aligned_size + 16);
     
     if (new_block == NULL) {return NULL;}
     
-    printf("mm_sbrk success\n"); // REMOVE LATER
+    //printf("mm_sbrk success\n"); // REMOVE LATER
     
-    int *header = (int*) new_block;
-    void *payload = header + 2;
-    int *footer = (int*)((char *)payload + aligned_size);
+    // segment the new block into header, payload, and footer
+    uint64_t *header = (uint64_t*) set_header(new_block, aligned_size); // creates a pointer for the header, and sets header's values
+    uint64_t *payload = (uint64_t *) get_payload(new_block); // creates a pointer for the payload
+    uint64_t *footer = (uint64_t *) set_footer(new_block, aligned_size); // creates a pointer for the footer, and sets footer's values
     
-    // header: store block size & allocated bit
-    header[0] = aligned_size;
-    header[1] = 1;
+    if ((footer == NULL) | (header == NULL) | (payload == NULL)) {return NULL;}
     
-    // footer: same contents as header
-    footer[0] = header[0];
-    footer[1] = header[1];
-    
-    printf("header address: %p  payload address: %p  footer address: %p\n", header, payload, footer); // REMOVE LATER
+    //printf("header address: %p  payload address: %p  footer address: %p\n", header, payload, footer); // REMOVE LATER
     
     return payload;
 }
+
+/*
+ * list_insert
+ */
+void list_insert(void *payload){
+
+  // always insert at the head
+  
+  if (data == NULL) {return false;}
+  
+  // store prev and next inside the payload
+  // prev pointer is first 8 bytes, next pointer is next 8 bytes
+  uint64_t *block = (uint64_t*) payload
+  
+  // insert into empty list
+  if (head == NULL) {
+    head = block;
+  } else {
+  // insert at head
+    block[1] = head;
+    head = block;
+  }
+}
+
+
+void* get_header(void *ptr) {
+  if (ptr == NULL) {return NULL;}
+  void *header = (void*) ((char*)ptr - 8);
+  
+  return header;
+}
+
+void* get_footer (void *ptr, size_t payload_size) {
+  if (ptr == NULL) {return NULL;}
+  void *footer = (void*) ((char*) ptr + payload_size);
+  return footer;
+}
+
 
 /*
  * free
@@ -114,18 +175,18 @@ void free(void* ptr)
     
     // clear the allocated bit in header and footer
     
-    char *my_ptr = (char *) ptr;
+    uint64_t *header = (uint64_t*)get_header(ptr);
+    uint64_t block_size = *header - 1;
     
-    int block_size = *((int *)(my_ptr-8));
-    int payload_size = block_size - 16;
+    uint64_t payload_size = block_size - 16;
     
-    int *header = (int *)(my_ptr-8);
-    int *footer = (int *)(my_ptr + payload_size + 4);
-    // header
-    *(header + 1) = 0;
+    uint64_t *footer = (uint64_t*) get_footer(ptr, payload_size);
     
-    // footer
-    *(footer + 1) = 0;
+    // clear header bit
+    *header = *header - 1;
+    
+    // clear footer bit;
+    *footer = *footer - 1;
     return;
 }
 
@@ -134,8 +195,39 @@ void free(void* ptr)
  */
 void* realloc(void* oldptr, size_t size)
 {
-    // IMPLEMENT THIS
-    return NULL;
+    if (oldptr == NULL) {
+      void *new_block = malloc(size);
+      
+      if (new_block == NULL) {return NULL;}
+      
+      new_block = memcpy(new_block, oldptr, size);
+      
+      free(oldptr);
+      oldptr = NULL;
+      
+      return new_block;
+    }
+    
+    if (size == 0) {
+      free(oldptr);
+      oldptr = NULL;
+      
+      return NULL;
+    }
+    
+    
+    void *new_block = malloc(size);
+    new_block = memcpy(new_block, oldptr, size);
+    
+    if (new_block == NULL) {
+      free(new_block);
+      return NULL;
+    }
+    
+    free(oldptr);
+    oldptr = NULL;
+    
+    return new_block;
 }
 
 /*

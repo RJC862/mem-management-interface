@@ -2,21 +2,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+void list_insert(void *head, void *payload){
 
-void list_insert(list_t *list, void *block_p){
-
-  // always insert at the tail
-  
+  // always insert at the head
   
   if (data == NULL) {return false;}
   
-  // store field data inside the free block itself
-  list_node_t *node = (list_node_t *) block_p;
-  node->prev = NULL;
-  node->next = NULL;
+  // store field data inside the payload
+  uint64_t *block = (uint64_t*) payload
+  
+  // insert into empty list
+  if (head == NULL) {
+    head = payload;
+  }
+  
+  
+  
   
   // insert in empty list
-  if (list->head == NULL) {
+  if (list->count == 0) {
     list->head = node;
     list->tail = node;
     list->count++;
@@ -32,11 +36,27 @@ void list_insert(list_t *list, void *block_p){
   return;
 }
 
+
+// removes a node from the list
 void list_remove(list_t *list, list_node_t *node){
   if (list == NULL || node == NULL) {return;}
   
-  if (list->head == node) {
-    list->head->next = NULL;
+  if (list->head == node && list->tail == node) {
+    list->head = NULL;
+    list->tail = NULL;
+    list->count = 0;
+  } else if (list->head == node) {
+    list_node_t next = node->next;
     
+    node->next = NULL;
+    list->head = temp;
+    list->count--;
+  } else if (list->tail == node){
+    list_node_t prev = list->prev;
+    
+    node->prev = NULL;
   }
+  
+  // set allocate bit in header and footer
+    char *mblock = (char *) node;
 }

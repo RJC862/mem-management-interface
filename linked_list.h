@@ -3,8 +3,8 @@
 
 
 typedef struct list_node{
-  list_node prev;
-  list_node next;
+  struct list_node prev;
+  struct list_node next;
   void *data;
 } list_node_t;
 
@@ -14,6 +14,8 @@ typedef struct list{
   list_node_t *tail;
   size_t *count;
 }list_t;
+
+void *list_create();
 
 bool list_insert(void *data)
 
