@@ -131,25 +131,25 @@ void* malloc(size_t size)
 /*
  * list_insert
  */
-void *list_insert(void *payload){
+void list_insert(void *payload){
 
   // always insert at the head
   
-  if (data == NULL) {return;}
+  if (payload == NULL) {return;}
   
   // store prev and next inside the payload
   // prev pointer is first 8 bytes, next pointer is next 8 bytes
-  uint64_t *block = (uint64_t*) payload
+  uint64_t *block = (uint64_t*) payload;
   
   // insert into empty list
-  if (head == NULL) {
+  if (head == 0) {
     head = block;
-    block[0] = NULL;
-    block[1] = NULL;
+    block[0] = 0;
+    block[1] = 0;
   } else {
   // insert at head
-    block[0] = NULL;
-    block[1] = head;
+    block[0] = 0;
+    block[1] = (uint64_t) head;
     head = block;
   }
 }
@@ -162,24 +162,24 @@ void list_remove(void *ptr){
   uint64_t *curr = (uint64_t*) ptr;
   
   if (head == ptr){
-    head = NULL;
+    head = 0;
   }
   
   // link previous block with next block
-  if (curr[0] != NULL) {
-    prev = curr[0];
+  if (curr[0] != 0) {
+    uint64_t *prev = (uint64_t*) curr[0];
     prev[1] = curr[1];
   }
   
   // link next block with previous block
-  if (curr[1] != NULL) {
-    next = curr[1];
+  if (curr[1] != 0) {
+    uint64_t *next = (uint64_t*) curr[1];
     next[0] = curr[0];
   }
   
   // clear current block
-  curr[0] = NULL;
-  curr[1] = NULL;
+  curr[0] = 0;
+  curr[1] = 0;
 }
 
 
