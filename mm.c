@@ -49,6 +49,8 @@
 #endif // DRIVER
 
 #define ALIGNMENT 16
+void* get_header(void *ptr);
+void list_remove(void *ptr);
 
 // rounds up to the nearest multiple of ALIGNMENT
 static size_t align(size_t x)
@@ -68,13 +70,13 @@ bool mm_init(void)
 }
 
 // helper function for setting header values
-void* set_header(void *block, size_t size) {
+void* set_header(void *block, size_t size, uint64_t allocated_bit) {
   if (block == NULL) {return NULL;}
   
   uint64_t *header = (uint64_t*) block;
   
   *header = size;
-  *header = *header + 1;
+  *header = *header + allocated_bit;
   
   return header;
 }
@@ -89,17 +91,70 @@ void *get_payload(void *block) {
 }
 
 // helper function for setting footer values
-void *set_footer(void *block, size_t size) {
+void *set_footer(void *block, size_t size, uint64_t allocated_bit) {
 
   if (block == NULL) {return NULL;}
   
   uint64_t *footer = (uint64_t*) ((char*)block + size - 8);
   
   *footer = size;
-  *footer = *footer + 1;
+  *footer = *footer + allocated_bit;
   return footer;
 }
 
+void *split_block (void *payload, size_t size){
+
+  if (payload == NULL) {return NULL;}
+  
+  uint64_t *header = (uint64_t*) get_header(payload);
+  
+  size_t requested = size + 16;
+  size_t block_size = *header;
+  size_t remaining = block_size - requested;
+  
+  // remaining block must be at least 32 bytes to split
+  if (remaining >= 32){
+  
+    void *block = (char*)payload + requested - 8; // pointer to the header of remaining block
+    
+    
+    void *header = set_header(block, remaining, 0);
+    void *payload = get_payload(block);
+    void *footer = set_footer(block, remaining, 0);
+    
+    if ((header == NULL) | (payload == NULL) | (footer == NULL)) {return NULL;}
+    
+    return payload;
+  }
+  
+  return NULL;
+}
+void *find_free_block(size_t size) {
+
+  void *curr = head;
+  
+  while (curr != 0) {
+  
+    // get the size of the current block
+    void *header = get_header(curr);
+    
+    size_t requested = size + 16;
+    size_t block_size = *(uint64_t*)header;
+    
+    // compare the size with the requested size
+    if (block_size >= requested) {
+    
+      // only split if left over block is at least 32 bytes
+      return curr;
+    }
+    
+    // move to next block
+    curr = (void*) (((uint64_t*)curr) + 1);
+  }
+  
+  // failed to find a suitable block
+  return NULL;
+}
 /*
  * malloc
  */
@@ -107,19 +162,34 @@ void* malloc(size_t size)
 {
     //printf("malloc'd: %ld Bytes\n", size); // REMOVE LATER
     
-    uint64_t aligned_size = align(size);
+    size_t aligned_size = align(size);
     
     //printf("Aligned size: %ld\n", aligned_size);
-    void *new_block = mm_sbrk(aligned_size + 16);
+    void *new_block = find_free_block(aligned_size);
+    
+    
+    if (new_block == NULL) {
+    
+      // failed to find a free block - request more space
+      new_block = mm_sbrk(aligned_size + 16);
+    } else {
+    
+      list_remove(new_block);
+      void *leftover = split_block(new_block, aligned_size); // payload of remaining block (if any)
+      
+      if (leftover != NULL) {
+        list_insert(leftover);
+      }
+    }
     
     if (new_block == NULL) {return NULL;}
     
     //printf("mm_sbrk success\n"); // REMOVE LATER
     
     // segment the new block into header, payload, and footer
-    uint64_t *header = (uint64_t*) set_header(new_block, aligned_size); // creates a pointer for the header, and sets header's values
+    uint64_t *header = (uint64_t*) set_header(new_block, aligned_size, 1); // creates a pointer for the header, and sets header's values
     uint64_t *payload = (uint64_t *) get_payload(new_block); // creates a pointer for the payload
-    uint64_t *footer = (uint64_t *) set_footer(new_block, aligned_size); // creates a pointer for the footer, and sets footer's values
+    uint64_t *footer = (uint64_t *) set_footer(new_block, aligned_size, 1); // creates a pointer for the footer, and sets footer's values
     
     if ((footer == NULL) | (header == NULL) | (payload == NULL)) {return NULL;}
     
@@ -131,25 +201,25 @@ void* malloc(size_t size)
 /*
  * list_insert
  */
-void *list_insert(void *payload){
+void list_insert(void *payload){
 
   // always insert at the head
   
-  if (data == NULL) {return;}
+  if (payload == NULL) {return;}
   
   // store prev and next inside the payload
   // prev pointer is first 8 bytes, next pointer is next 8 bytes
-  uint64_t *block = (uint64_t*) payload
+  uint64_t *block = (uint64_t*) payload;
   
   // insert into empty list
-  if (head == NULL) {
+  if (head == 0) {
     head = block;
-    block[0] = NULL;
-    block[1] = NULL;
+    block[0] = 0;
+    block[1] = 0;
   } else {
   // insert at head
-    block[0] = NULL;
-    block[1] = head;
+    block[0] = 0;
+    block[1] = (uint64_t) head;
     head = block;
   }
 }
@@ -157,29 +227,28 @@ void *list_insert(void *payload){
 // removes a block from the list
 void list_remove(void *ptr){
   if (ptr == NULL) {return;}
-  
-  
+
   uint64_t *curr = (uint64_t*) ptr;
   
   if (head == ptr){
-    head = NULL;
+    head = 0;
   }
   
   // link previous block with next block
-  if (curr[0] != NULL) {
-    prev = curr[0];
+  if (curr[0] != 0) {
+    uint64_t *prev = (uint64_t*) curr[0];
     prev[1] = curr[1];
   }
   
   // link next block with previous block
-  if (curr[1] != NULL) {
-    next = curr[1];
+  if (curr[1] != 0) {
+    uint64_t *next = (uint64_t*) curr[1];
     next[0] = curr[0];
   }
   
   // clear current block
-  curr[0] = NULL;
-  curr[1] = NULL;
+  curr[0] = 0;
+  curr[1] = 0;
 }
 
 
