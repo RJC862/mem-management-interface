@@ -49,6 +49,8 @@
 #endif // DRIVER
 
 #define ALIGNMENT 16
+void* get_header(void *ptr);
+void list_remove(void *ptr);
 
 // rounds up to the nearest multiple of ALIGNMENT
 static size_t align(size_t x)
@@ -100,6 +102,29 @@ void *set_footer(void *block, size_t size) {
   return footer;
 }
 
+void *find_free_block(uint64_t size) {
+
+  void *curr = head;
+  
+  while (curr != 0) {
+  
+    // get the size of the current block
+    void *header = get_header(curr);
+    
+    uint64_t payload_size = *(uint64_t*)header - 16;
+    
+    // compare the size with the requested size
+    if (payload_size >= size) {
+      return curr;
+    }
+    
+    // move to next block
+    curr = (void*) (((uint64_t*)curr) + 1);
+  }
+  
+  // failed to find a suitable block
+  return NULL;
+}
 /*
  * malloc
  */
@@ -110,7 +135,18 @@ void* malloc(size_t size)
     uint64_t aligned_size = align(size);
     
     //printf("Aligned size: %ld\n", aligned_size);
-    void *new_block = mm_sbrk(aligned_size + 16);
+    void *new_block = find_free_block(aligned_size);
+    
+    
+    if (new_block == NULL) {
+    
+      // failed to find a free block - request more space
+      new_block = mm_sbrk(aligned_size + 16);
+    } else {
+    
+      // remove block upon successful search
+      list_remove(new_block);
+    }
     
     if (new_block == NULL) {return NULL;}
     
@@ -157,8 +193,7 @@ void list_insert(void *payload){
 // removes a block from the list
 void list_remove(void *ptr){
   if (ptr == NULL) {return;}
-  
-  
+
   uint64_t *curr = (uint64_t*) ptr;
   
   if (head == ptr){
