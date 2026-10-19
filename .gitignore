@@ -1,1 +1,4 @@
 .nfs*
+mdriver
+*.o
+*.d

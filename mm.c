@@ -82,6 +82,8 @@
 #endif // DRIVER
 
 #define ALIGNMENT 16
+void* get_header(void *ptr);
+void list_remove(void *ptr);
 
 
 
@@ -193,6 +195,7 @@ void *find_free_block(size_t size) {
     if (block_size >= size) {
     
       return curr;
+      
     }
     
     // move to next block
@@ -255,6 +258,7 @@ void* malloc(size_t size)
     }
 }
 
+
 // inserts a free block at the head of the free list
 // takes as input the header pointer of a block
 // returns nothing
@@ -308,6 +312,7 @@ void list_remove(void *header){
   payload[0] = 0;
   payload[1] = 0;
 }
+
 
 // merges free blocks neighboring header's block
 // takes as input the header pointer of a block and the size of the block that was freed
@@ -393,7 +398,6 @@ void *merge(void *header, size_t block_size){
   
     return l_header;
   }
-
 }
 
 // gets the header for a payload; breaks convention here because it's for a specific use case in free()
