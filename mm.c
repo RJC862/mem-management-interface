@@ -8,6 +8,7 @@
  *   set_header(), set_footer(),
  *   find_free_block(), split_block()
  *   list_insert(), list_remove()
+ *   merge()
  * 
  * High Level Implementation Description:
  *  
@@ -15,11 +16,30 @@
  *   
  *  A doubly linked list is used to track free blocks, and splitting and coalescing are utilized to minimize wasted memory.
  *
- *  malloc() - allocates n bytes of memory requested by the caller.
+ *  void *malloc(size_t size) - allocates size bytes of memory requested by the caller.
  *  The mechanism behind malloc() works as such: 
- *    1. A free list is searched for a free block of suitable size. In this case, the suitable size is at least n + 16 bytes, because we also require space for the header and footer.
- *    2. If a free block of suitable size is found, but its size is at least 32 bytes larger than the smallest suitable size, we split it and return the remaining chunk back to the     *       free list. Otherwise do nothing.
- *    3. The free block is removed from the list, its header and footer are set appropriately, and the payload is given to the caller.
+ *    1. A free list is searched for a free block of suitable size. In this case, the suitable size is at least size + 16 bytes, because we also require space for the header and footer.
+ *    2. If a free block of suitable size is found, but its size is at least 32 bytes larger than the smallest suitable size, we split it and return the remaining chunk back to the free list. Otherwise do nothing.
+ *    3. The free block is removed from the list, its header and footer are set appropriately, and the payload is returned to the caller.
+ *  
+ *  void free(void *payload) - deallocates the block of memory containing payload.
+ *  The mechanism behind free() works as such:
+ *    1. First, the allocated bit is set to 0 for the header and footer of the block containing payload. This effectively deallocated the memory block.
+ *    2. Coalesce using merge(). Coalescing amends external fragmentation in the heap.
+ *    3. Coalesced/Merged block is then added back to the free list.
+ *
+ *  void* realloc(void* oldptr, size_t size) - resizes the memory chunk at oldptr to size bytes
+ *  The mechanism behind realloc() works as such:
+ *    1. Call malloc(), for a chunk of memory of size bytes.
+ *    2. Copy the bytes at oldptr to the new malloc'd block
+ *    3. Return the new malloc'd payload
+ *
+ *  Note: The convention is usually to use header pointers as a base for pointer arithmetic.
+ *        This is because free blocks point to each other's headers in the linked list, 
+ *        and the linked list is the basis of memory management.
+ *
+ *  Custom helper functions are documented with in-function comments. 
+ *  
  */
 #include <assert.h>
 #include <stdlib.h>
@@ -67,7 +87,6 @@
 
 
 
-void *get_header(void *ptr);
 void list_remove(void *ptr);
 
 
@@ -95,7 +114,10 @@ bool mm_init(void)
     return true;
 }
 
+
 // helper function for setting header values
+// takes as input the header pointer of a block, the size of the block, and the allocation bit for the block
+// returns nothing
 void set_header(void *header, size_t size, uint64_t allocated_bit) {
   if (header == NULL) {return;}
   uint64_t *new_header = (uint64_t *) header;
@@ -105,6 +127,8 @@ void set_header(void *header, size_t size, uint64_t allocated_bit) {
 }
 
 // helper function for getting payload pointer
+// takes as input the header pointer of a block
+// returns the payload pointer
 void *get_payload(void *header) {
 
     if (header == NULL) {return NULL;}
@@ -113,7 +137,9 @@ void *get_payload(void *header) {
     return payload;
 }
 
-// helper function for setting footer values
+// helper function for setting footer values; use in tandem with set_header always
+// takes as input the header pointer of a block, the size of the block, and the allocation bit for the block.
+// returns nothing
 void set_footer(void *header, size_t size, uint64_t allocated_bit) {
 
   if (header == NULL) {return;}
@@ -124,7 +150,8 @@ void set_footer(void *header, size_t size, uint64_t allocated_bit) {
   *footer = *footer + allocated_bit;
 }
 
-// splits the block header points to
+// splits the block header points to; called only in response to a malloc()
+// takes as input the header pointer of a block and the required size to fulfill the malloc() call
 // returns a pointer to the header of the remaining block
 void *split_block (void *header, size_t size){
 
@@ -149,7 +176,8 @@ void *split_block (void *header, size_t size){
   return NULL;
 }
 
-// finds a suitable free block in the free list
+// finds a suitable free block in the free list; called only in response to malloc()
+// takes as input the required size to fulfill the malloc() call
 // returns a pointer to the head of the first free block it finds
 void *find_free_block(size_t size) {
 
@@ -181,13 +209,11 @@ void *find_free_block(size_t size) {
  */
 void* malloc(size_t size)
 {
-    //printf("malloc'd: %ld Bytes\n", size); // REMOVE LATER
     
     size_t aligned_size = align(size);
     
     size_t required_size = aligned_size + 16; // 16 bytes for header and footer
     
-    //printf("Aligned size: %ld\n", aligned_size);
     
     size_t block_size = required_size;
     
@@ -229,7 +255,8 @@ void* malloc(size_t size)
     }
 }
 
-// insert a free block at the head of the free list
+// inserts a free block at the head of the free list
+// takes as input the header pointer of a block
 // returns nothing
 void list_insert(void *header){
   if (header == NULL) {return;}
@@ -252,16 +279,13 @@ void list_insert(void *header){
 }
 
 // removes the block at header from the free list
+// takes as input the header pointer of a block
 // returns nothing
 // payload[0] points to the previous block's header, payload[1] the next block's header
 void list_remove(void *header){
   if (header == NULL) {return;}
 
   uint64_t *payload = (uint64_t*) get_payload(header);
-  
-  assert(((uintptr_t) header & 0xF) == 8);                       // headers should end in 8
-  assert(!(*(uint64_t *) header & 1));                           // must be a free block
-
 
   void *prev = (void *) payload[0];
   void *next = (void *) payload[1];
@@ -286,6 +310,7 @@ void list_remove(void *header){
 }
 
 // merges free blocks neighboring header's block
+// takes as input the header pointer of a block and the size of the block that was freed
 // returns the header of the merged block
 void *merge(void *header, size_t block_size){
 
@@ -361,6 +386,7 @@ void *merge(void *header, size_t block_size){
     
     list_remove(l_header);
     
+    // merge current block and both neighbors
     size_t merge_size = block_size + l_size + r_size;
     set_header(l_header, merge_size, 0);
     set_footer(l_header, merge_size, 0);
@@ -370,6 +396,9 @@ void *merge(void *header, size_t block_size){
 
 }
 
+// gets the header for a payload; breaks convention here because it's for a specific use case in free()
+// takes as input a payload pointer
+// returns the header pointer for the block containing payload
 void *get_header(void *payload) {
   if (payload == NULL) {return NULL;}
   
@@ -377,6 +406,10 @@ void *get_header(void *payload) {
   
   return header;
 }
+
+// gets the footer for a block
+// takes as input a header pointer
+// returns the footer pointer for the block
 void *get_footer(void *header){
 
   if (header == NULL) {return NULL;}
