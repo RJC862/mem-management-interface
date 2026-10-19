@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-list_node_t *head;
+void *head;
 
-bool list_insert(void *data)
+void list_insert(void *data);
 
-bool list_remove(void *data)
+void list_remove(void *data);
