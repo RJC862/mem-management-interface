@@ -7,40 +7,40 @@ You can also find this at the top of the source code
 
 custom helper functions:  
 get_header(), get_footer(), get_payload(),  
- *   set_header(), set_footer(),  
- *   find_free_block(), split_block()  
- *   list_insert(), list_remove()  
- *   merge()  
- *   
- * High Level Implementation Description:  
- *  
- *  The project implements malloc() and free(), as well as realloc() and calloc().  
- *   
- *  A doubly linked list is used to track free blocks, and splitting and coalescing are utilized to minimize wasted memory.  
- *  
- *  void *malloc(size_t size) - allocates size bytes of memory requested by the caller.  
- *  The mechanism behind malloc() works as such:   
- *    1. A free list is searched for a free block of suitable size. In this case, the suitable size is at least size + 16 bytes, because we also require space for the header and footer.  
- *    2. If a free block of suitable size is found, but its size is at least 32 bytes larger than the smallest suitable size, we split it and return the remaining chunk back to the free list. Otherwise do nothing.  
- *    3. The free block is removed from the list, its header and footer are set appropriately, and the payload is returned to the caller.  
- *    
- *  void free(void *payload) - deallocates the block of memory containing payload.  
- *  The mechanism behind free() works as such:  
- *    1. First, the allocated bit is set to 0 for the header and footer of the block containing payload. This effectively deallocated the memory block.  
- *    2. Coalesce using merge(). Coalescing amends external fragmentation in the heap.  
- *    3. Coalesced/Merged block is then added back to the free list.  
- *  
- *  void* realloc(void* oldptr, size_t size) - resizes the memory chunk at oldptr to size bytes  
- *  The mechanism behind realloc() works as such:  
- *    1. Call malloc(), for a chunk of memory of size bytes.  
- *    2. Copy the bytes at oldptr to the new malloc'd block  
- *    3. Return the new malloc'd payload  
- *  
- *  Note: The convention is usually to use header pointers as a base for pointer arithmetic.  
- *        This is because free blocks point to each other's headers in the linked list,   
- *        and the linked list is the basis of memory management.  
- *  
- *  Custom helper functions are documented with in-function comments.   
+    set_header(), set_footer(),  
+    find_free_block(), split_block()  
+    list_insert(), list_remove()  
+    merge()  
+    
+  High Level Implementation Description:  
+ 
+   The project implements malloc() and free(), as well as realloc() and calloc().  
+    
+   A doubly linked list is used to track free blocks, and splitting and coalescing are utilized to minimize wasted memory.  
+   
+   void *malloc(size_t size) - allocates size bytes of memory requested by the caller.  
+   The mechanism behind malloc() works as such:   
+     1. A free list is searched for a free block of suitable size. In this case, the suitable size is at least size + 16 bytes, because we also require space for the header and footer.  
+     2. If a free block of suitable size is found, but its size is at least 32 bytes larger than the smallest suitable size, we split it and return the remaining chunk back to the free list. Otherwise do nothing.  
+     3. The free block is removed from the list, its header and footer are set appropriately, and the payload is returned to the caller.  
+     
+   void free(void *payload) - deallocates the block of memory containing payload.  
+   The mechanism behind free() works as such:  
+     1. First, the allocated bit is set to 0 for the header and footer of the block containing payload. This effectively deallocated the memory block.  
+     2. Coalesce using merge(). Coalescing amends external fragmentation in the heap.  
+     3. Coalesced/Merged block is then added back to the free list.  
+   
+   void* realloc(void* oldptr, size_t size) - resizes the memory chunk at oldptr to size bytes  
+   The mechanism behind realloc() works as such:  
+     1. Call malloc(), for a chunk of memory of size bytes.  
+     2. Copy the bytes at oldptr to the new malloc'd block  
+     3. Return the new malloc'd payload  
+   
+   Note: The convention is usually to use header pointers as a base for pointer arithmetic.  
+         This is because free blocks point to each other's headers in the linked list,   
+         and the linked list is the basis of memory management.  
+   
+   Custom helper functions are documented with in-function comments.   
 
 
 # Project 3: Malloclab Dynamic Storage Allocator
