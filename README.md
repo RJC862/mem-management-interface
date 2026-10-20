@@ -14,7 +14,7 @@ get_header(), get_footer(), get_payload(),
     
   High Level Implementation Description:  
  
-   The project implements malloc() and free(), as well as realloc() and calloc().  
+The project implements malloc() and free(), as well as realloc() and calloc().  
     
    A doubly linked list is used to track free blocks, and splitting and coalescing are utilized to minimize wasted memory.  
    
@@ -37,8 +37,8 @@ get_header(), get_footer(), get_payload(),
      3. Return the new malloc'd payload  
    
    Note: The convention is usually to use header pointers as a base for pointer arithmetic.  
-         This is because free blocks point to each other's headers in the linked list,   
-         and the linked list is the basis of memory management.  
+    This is because free blocks point to each other's headers in the linked list,   
+    and the linked list is the basis of memory management.  
    
    Custom helper functions are documented with in-function comments.   
 
