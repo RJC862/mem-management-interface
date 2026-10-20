@@ -1,3 +1,8 @@
+# Overview
+This is a Memory Management Interface I wrote for my Operating Systems course. See project details & description below.
+Source code in mm.c
+
+
 # Project 3: Malloclab Dynamic Storage Allocator
 
 ## Release Date: 10/10/2026, 6 PM Checkpoint 1 Due Date: 10/20/2026, 6 PM Checkpoint 2 Due Date: 10/30/2026, 6 PM
