@@ -83,13 +83,6 @@
 
 #define ALIGNMENT 16
 void* get_header(void *ptr);
-void list_remove(void *ptr);
-
-
-
-
-
-void list_remove(void *ptr);
 
 
 // rounds up to the nearest multiple of ALIGNMENT
@@ -103,7 +96,7 @@ static size_t align(size_t x)
  */
 bool mm_init(void)
 {
-    head = 0; // reset free list
+    heads = 0; // reset free list
     
     uint64_t *padding = mm_sbrk(8); 
     
@@ -181,7 +174,7 @@ void *split_block (void *header, size_t size){
 // finds a suitable free block in the free list; called only in response to malloc()
 // takes as input the required size to fulfill the malloc() call
 // returns a pointer to the head of the first free block it finds
-void *find_free_block(size_t size) {
+void *find_free_block(void *head, size_t size) {
 
   void *curr = head;
   
@@ -207,6 +200,26 @@ void *find_free_block(size_t size) {
   // failed to find a suitable block
   return NULL;
 }
+
+// maps a block's size to its appropriate segregated list
+// takes as input the block size
+// returns the head of the block's corresponding list
+void *size_to_list(size_t size) {
+
+  // each list holds blocks of size 2^index bytes where index is the position of the list's head in the heads array
+  // heads[0] holds 32 to 63 byte blocks so to get the correct final index, we have to start counting the index at -5 in the loop
+  int index = -5;
+  
+  while (size > 1) {
+    index++;
+    size /= 2;
+  }
+  
+  void *head = (void *) (((uint64_t *)heads)[index]);
+  return head;
+}
+
+
 /*
  * malloc
  */
@@ -217,10 +230,13 @@ void* malloc(size_t size)
     
     size_t required_size = aligned_size + 16; // 16 bytes for header and footer
     
-    
     size_t block_size = required_size;
     
-    void *new_block = find_free_block(required_size);
+    void *head = size_to_list(block_size); // appropriate segregated list
+    
+    void *new_block = find_free_block(head, required_size);
+    
+
     
     if (new_block == NULL) {
     
@@ -238,7 +254,7 @@ void* malloc(size_t size)
     } else {
       // split the free block if necessary
       
-      list_remove(new_block);
+      list_remove(head, new_block);
       
             
       uint64_t allocated = *(uint64_t *) new_block & 1;
@@ -248,7 +264,7 @@ void* malloc(size_t size)
       
       if (leftover_header != NULL) {
         block_size = required_size;
-        list_insert(leftover_header);
+        list_insert(&head, leftover_header);
       }
       
       set_header(new_block, block_size, 1);
@@ -262,7 +278,7 @@ void* malloc(size_t size)
 // inserts a free block at the head of the free list
 // takes as input the header pointer of a block
 // returns nothing
-void list_insert(void *header){
+void list_insert(void **head, void *header){
   if (header == NULL) {return;}
   
   // store prev and next inside the payload
@@ -273,20 +289,20 @@ void list_insert(void *header){
   payload[1] = (uint64_t) head;
   
   // set the head's prev data to point to the new block's header
-  if (head != 0){
+  if (*head != 0){
     uint64_t *head_payload = (uint64_t *) get_payload(head);
     
     head_payload[0] = (uint64_t) header;
   }
   
-  head = header;
+  *head = header;
 }
 
 // removes the block at header from the free list
 // takes as input the header pointer of a block
 // returns nothing
 // payload[0] points to the previous block's header, payload[1] the next block's header
-void list_remove(void *header){
+void list_remove(void **head, void *header){
   if (header == NULL) {return;}
 
   uint64_t *payload = (uint64_t*) get_payload(header);
@@ -299,7 +315,7 @@ void list_remove(void *header){
     uint64_t *prev_payload = (uint64_t *) get_payload(prev);
     prev_payload[1] = (uint64_t) next;
   } else {
-    head = next; // the removed block was the head
+    *head = next; // the removed block was the head
   }
   
   // link the next block to the previous block
@@ -347,9 +363,10 @@ void *merge(void *header, size_t block_size){
     
   } else if (right_allocated == 0 && left_allocated) { // right neighbor free, left neighbor allocated
   
-    list_remove(right_neighbor);
-    
     size_t r_size = *right_neighbor;
+    
+    void *head = size_to_list(r_size);
+    list_remove(&head, right_neighbor);
     
     // merge current block and right neighbor
     size_t merge_size = block_size + r_size;
@@ -363,11 +380,12 @@ void *merge(void *header, size_t block_size){
   } else if (left_allocated == 0 && right_allocated) { // left neighbor free, right neighbor allocated
   
     size_t l_size = *left_neighbor;
+    void *head = size_to_list(l_size);
     
     // use the left neighbor's header for consistency in conventions
     uint64_t *l_header = (uint64_t *) ((char *) header - l_size);
     
-    list_remove(l_header);
+    list_remove(&head, l_header);
 
     // merge current block and left neighbor
     size_t merge_size = block_size + l_size;
@@ -379,17 +397,19 @@ void *merge(void *header, size_t block_size){
     return l_header;
     
   } else { // both neighbors free
-  
-    list_remove(right_neighbor);
     
     size_t l_size = *left_neighbor;
-    
     size_t r_size = *right_neighbor;
+    
+    void *head_l = size_to_list(l_size);
+    void *head_r = size_to_list(r_size);
+    
+    list_remove(&head_r, right_neighbor);
     
     // use the left neighbor's header for consistency in conventions
     uint64_t *l_header = (uint64_t *) ((char *) header - l_size);
     
-    list_remove(l_header);
+    list_remove(&head_l, l_header);
     
     // merge current block and both neighbors
     size_t merge_size = block_size + l_size + r_size;
@@ -452,7 +472,12 @@ void free(void* payload)
     void *merged = merge(header, block_size);
     
     if (merged == NULL) {return;}
-    list_insert(merged);
+    
+    allocated = *(uint64_t *) merged & 1;
+    size_t merged_size = *(uint64_t *) merged - allocated;
+    
+    void *head = size_to_list(merged_size);
+    list_insert(&head, merged);
 }
 /*
  * realloc
