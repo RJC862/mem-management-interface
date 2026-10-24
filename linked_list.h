@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void *head;
+uint64_t *heads[16];
 
 void list_insert(void *data);
 

@@ -83,13 +83,6 @@
 
 #define ALIGNMENT 16
 void* get_header(void *ptr);
-void list_remove(void *ptr);
-
-
-
-
-
-void list_remove(void *ptr);
 
 
 
@@ -110,7 +103,10 @@ static size_t align(size_t x)
  */
 bool mm_init(void)
 {
-    head = 0; // reset free list
+    // reset segregated list
+    for (int i = 0; i < 16; i++) {
+      heads[i] = 0;
+    }
     
     uint64_t *padding = mm_sbrk(8); 
     
@@ -188,32 +184,56 @@ void *split_block (void *header, size_t size){
 // finds a suitable free block in the free list; called only in response to malloc()
 // takes as input the required size to fulfill the malloc() call
 // returns a pointer to the head of the first free block it finds
-void *find_free_block(size_t size) {
+void *find_free_block(uint64_t list_index, size_t size) {
 
-  void *curr = head;
+  assert(list_index <= 15);
   
-  while (curr != 0) {
+  // search all lists starting from list_index
+  while (list_index < 16) {
   
-    // get the size of the current block
-    uint64_t allocated = *(uint64_t *)curr & 1;
-    size_t block_size = *(uint64_t*)curr - allocated;
+    void *curr = (void *) heads[list_index];
     
-    // compare the size with the requested size
-    if (block_size >= size) {
     
-      return curr;
+    while (curr != 0) {
+      // get the size of the current block
+      uint64_t allocated = *(uint64_t *)curr & 1;
+      size_t block_size = *(uint64_t*)curr - allocated;
       
+      // compare the size with the requested size
+      if (block_size >= size) {
+      
+        return curr;
+      
+      }
+      
+      // move to next block
+      
+      uint64_t *payload = (uint64_t *)get_payload(curr);
+      curr = (void *) payload[1];
     }
-    
-    // move to next block
-    
-    uint64_t *payload = (uint64_t *)get_payload(curr);
-    curr = (void *) payload[1];
+    list_index++;
   }
   
   // failed to find a suitable block
   return NULL;
 }
+
+uint64_t size_to_list(size_t size) {
+
+  int index = -5;
+  
+  while (size > 1) {
+    index++;
+    size /= 2;
+  }
+  
+  if (index >= 16){
+    return 15; // everything too large for the other lists goes into the last list
+  }
+  return index;
+}
+
+
 /*
  * malloc
  */
@@ -224,10 +244,15 @@ void* malloc(size_t size)
     
     size_t required_size = aligned_size + 16; // 16 bytes for header and footer
     
+    if (required_size < 32) {
+      required_size = 32;
+    }
     
     size_t block_size = required_size;
     
-    void *new_block = find_free_block(required_size);
+    uint64_t list_index = size_to_list(block_size);
+    
+    void *new_block = find_free_block(list_index, required_size);
     
     if (new_block == NULL) {
     
@@ -239,22 +264,22 @@ void* malloc(size_t size)
       
       set_header(new_block, block_size, 1);
       set_footer(new_block, block_size, 1);
-      
       return get_payload(new_block);
       
     } else {
       // split the free block if necessary
       
+      
+      
       list_remove(new_block);
       
-            
-      uint64_t allocated = *(uint64_t *) new_block & 1;
-      block_size = *(uint64_t *) new_block - allocated;
+      block_size = *(uint64_t *) new_block & ~1ULL;
       
       void *leftover_header = split_block(new_block, required_size);
       
       if (leftover_header != NULL) {
         block_size = required_size;
+        
         list_insert(leftover_header);
       }
       
@@ -272,21 +297,27 @@ void* malloc(size_t size)
 void list_insert(void *header){
   if (header == NULL) {return;}
   
+  // calculate segregated list to insert into
+  size_t size = *(uint64_t *) header & ~1ULL;
+  uint64_t idx = size_to_list(size);
+  
   // store prev and next inside the payload
   // prev pointer is first 8 bytes, next pointer is next 8 bytes
   uint64_t *payload = (uint64_t*) get_payload(header);
+  
+  void *head = (void *) heads[idx];
   
   payload[0] = 0;
   payload[1] = (uint64_t) head;
   
   // set the head's prev data to point to the new block's header
   if (head != 0){
-    uint64_t *head_payload = (uint64_t *) get_payload(head);
+    uint64_t *head_payload = get_payload(head);
     
     head_payload[0] = (uint64_t) header;
   }
   
-  head = header;
+  heads[idx] = (uint64_t *) header;
 }
 
 // removes the block at header from the free list
@@ -295,6 +326,10 @@ void list_insert(void *header){
 // payload[0] points to the previous block's header, payload[1] the next block's header
 void list_remove(void *header){
   if (header == NULL) {return;}
+  
+  // calculate segregated list to remove from
+  size_t size = *(uint64_t *) header & ~1ULL;
+  uint64_t idx = size_to_list(size);
 
   uint64_t *payload = (uint64_t*) get_payload(header);
 
@@ -306,7 +341,7 @@ void list_remove(void *header){
     uint64_t *prev_payload = (uint64_t *) get_payload(prev);
     prev_payload[1] = (uint64_t) next;
   } else {
-    head = next; // the removed block was the head
+    heads[idx] = (uint64_t *) next; // the removed block was the head
   }
   
   // link the next block to the previous block
@@ -353,10 +388,10 @@ void *merge(void *header, size_t block_size){
     return header;
     
   } else if (right_allocated == 0 && left_allocated) { // right neighbor free, left neighbor allocated
-  
-    list_remove(right_neighbor);
     
     size_t r_size = *right_neighbor;
+    
+    list_remove(right_neighbor);
     
     // merge current block and right neighbor
     size_t merge_size = block_size + r_size;
@@ -386,12 +421,13 @@ void *merge(void *header, size_t block_size){
     return l_header;
     
   } else { // both neighbors free
-  
-    list_remove(right_neighbor);
     
     size_t l_size = *left_neighbor;
     
     size_t r_size = *right_neighbor;
+    
+    
+    list_remove(right_neighbor);
     
     // use the left neighbor's header for consistency in conventions
     uint64_t *l_header = (uint64_t *) ((char *) header - l_size);
@@ -454,11 +490,11 @@ void free(void* payload)
     *header = *header - allocated;
     *footer = *footer - allocated;
     
-    
     // merge any free neighbors
     void *merged = merge(header, block_size);
     
     if (merged == NULL) {return;}
+    
     list_insert(merged);
 }
 /*
@@ -466,19 +502,18 @@ void free(void* payload)
  */
 void* realloc(void* oldptr, size_t size)
 {
+
+    // resizing from a null pointer behaves as a malloc
     if (oldptr == NULL) {
       void *new_block = malloc(size);
       
       if (new_block == NULL) {return NULL;}
       
-      new_block = memcpy(new_block, oldptr, size);
-      
-      free(oldptr);
-      oldptr = NULL;
-      
       return new_block;
     }
     
+    
+    // resizing to 0 bytes frees the block
     if (size == 0) {
       free(oldptr);
       oldptr = NULL;
@@ -488,7 +523,21 @@ void* realloc(void* oldptr, size_t size)
     
     
     void *new_block = malloc(size);
-    new_block = memcpy(new_block, oldptr, size);
+    
+    if (new_block == NULL) return NULL;
+    
+    size_t copy_size;
+    
+    size_t old_payload_size = (*(uint64_t *) get_header(oldptr) & ~1ULL) - 16 ; 
+    
+    // make sure only the necessary bytes are copied
+    if (size < old_payload_size) {
+      copy_size = size;
+    } else {
+      copy_size = old_payload_size;
+    }
+    
+    new_block = memcpy(new_block, oldptr, copy_size);
     
     if (new_block == NULL) {
       free(new_block);
