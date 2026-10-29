@@ -36,8 +36,8 @@ You can also find this at the top of the source code
  *    3. Return the new malloc'd payload.   
  *  
  *  Note: The convention is usually to use header pointers as a base for pointer arithmetic.  
- *        This is because free blocks point to each other's headers in the linked list,   
- *        and the linked list is the basis of memory management.  
+ *    This is because free blocks point to each other's headers in the linked list,   
+ *    and the linked list is the basis of memory management.  
  *  
  *  Custom helper functions are documented with in-function comments.   
  *    
